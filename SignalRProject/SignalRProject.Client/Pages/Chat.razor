@@ -1,0 +1,61 @@
+﻿@page "/chat"
+@inject NavigationManager NavigationManager
+@rendermode InteractiveWebAssembly
+@inherits Microsoft.AspNetCore.Components.ComponentBase
+
+
+<h3>Chat</h3>
+@if (IsConnected)
+{
+    <input type="text" @bind="userInput" />
+    <input type="text" @bind="messageInput" />
+    <button @onclick="Send">Send</button>
+    <ul id="messagesList">
+        @foreach (var message in messages)
+        {
+            <li>@message</li>
+        }
+    </ul>
+}
+else
+{
+    <span>Connecting.........</span>
+}
+
+@code {
+    private HubConnection hubConnection;
+    private List<string> messages = new List<string>();
+    private string userInput;
+    private string messageInput;
+
+    protected override async Task OnInitializedAsync()
+    {
+        hubConnection = new HubConnectionBuilder().WithUrl(NavigationManager.ToAbsoluteUri("/chathub")).Build();
+
+        hubConnection.On<string, string>("RecieveMessage", (user, message) =>
+        {
+            var encodemsg = $"{user} : {message}";
+
+            // Use InvokeAsync to switch to the UI thread
+            InvokeAsync(() =>
+            {
+                messages.Add(encodemsg);
+                StateHasChanged();
+            });
+        });
+
+        try
+        {
+            await hubConnection.StartAsync();
+            Console.WriteLine("Hub connection started.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error starting the hub connection: {ex.Message}");
+        }
+    }
+
+    Task Send() => hubConnection.SendAsync("SendMessage", userInput, messageInput);
+    public bool IsConnected => hubConnection.State == HubConnectionState.Connected;
+
+}
